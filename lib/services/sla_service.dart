@@ -39,7 +39,11 @@ class SlaService {
     final current = now ?? DateTime.now();
 
     if (isCompleted) {
-      final late = completedAt != null && completedAt.isAfter(deadline);
+      // Without a completion time we cannot claim "on time".
+      if (completedAt == null) {
+        return const SlaResult(SlaStatus.completed, 'Marked as done');
+      }
+      final late = completedAt.isAfter(deadline);
       return SlaResult(SlaStatus.completed,
           late ? 'Completed after the deadline' : 'Completed on time');
     }
