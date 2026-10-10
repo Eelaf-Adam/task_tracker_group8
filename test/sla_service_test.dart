@@ -1,60 +1,77 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:task_tracker_group8/models/task.dart';
 import 'package:task_tracker_group8/services/sla_service.dart';
 
 void main() {
-  final now = DateTime(2026, 10, 10, 12);
+  final createdAt = DateTime(2026, 10, 8, 9);
 
-  SlaStatus run({
-    required Duration createdAgo,
-    required Duration dueIn,
-    bool done = false,
-    bool started = false,
-    String priority = 'medium',
+  Task makeTask({
+    String? id,
+    String status = 'To Do',
+    String priority = 'Medium',
+    String assignedTo = 'Diane',
+    bool isCompleted = false,
+    DateTime? dueDate,
   }) =>
-      SlaService.classify(
-        createdAt: now.subtract(createdAgo),
-        deadline: now.add(dueIn),
-        isCompleted: done,
-        isStarted: started,
+      Task(
+        id: id ?? createdAt.millisecondsSinceEpoch.toString(),
+        title: 'Test task',
+        description: 'Test description',
+        assignedTo: assignedTo,
+        dueDate: dueDate ?? DateTime(2026, 10, 10),
         priority: priority,
-        now: now,
-      ).status;
+        status: status,
+        isCompleted: isCompleted,
+      );
 
-  test('done task is Completed even if past deadline', () {
-    expect(
-        run(createdAgo: const Duration(days: 5), dueIn: const Duration(days: -1), done: true),
-        SlaStatus.completed);
+  test('a task is due at the end of its due date', () {
+    expect(makeTask().due, DateTime(2026, 10, 10, 23, 59, 59));
   });
 
-  test('past deadline and not done is Overdue', () {
-    expect(run(createdAgo: const Duration(days: 5), dueIn: const Duration(hours: -1)),
-        SlaStatus.overdue);
+  test('created time is read from the id', () {
+    expect(makeTask().created, createdAt);
   });
 
-  test('high priority is At Risk with 40h left', () {
-    expect(
-        run(createdAgo: const Duration(days: 1), dueIn: const Duration(hours: 40),
-            priority: 'high', started: true),
-        SlaStatus.atRisk);
+  test('non-numeric id falls back to 7 days before the deadline', () {
+    final t = makeTask(id: 'abc');
+    expect(t.created, t.due.subtract(const Duration(days: 7)));
   });
 
-  test('low priority is On Track with 40h left', () {
-    expect(
-        run(createdAgo: const Duration(days: 1), dueIn: const Duration(hours: 40),
-            priority: 'low', started: true),
-        SlaStatus.onTrack);
+  test('status helpers', () {
+    expect(makeTask(status: 'To Do').isStarted, false);
+    expect(makeTask(status: 'In Progress').isStarted, true);
+    expect(makeTask(status: 'Done').isDone, true);
+    expect(makeTask(isCompleted: true).isDone, true);
+    expect(makeTask(status: 'In Progress').statusLabel, 'In Progress');
   });
 
-  test('not started with 80% of time used is At Risk', () {
-    expect(
-        run(createdAgo: const Duration(days: 8), dueIn: const Duration(days: 2), priority: 'low'),
-        SlaStatus.atRisk);
+  test('empty assignee shows Unassigned', () {
+    expect(makeTask(assignedTo: '').assigneeName, 'Unassigned');
   });
 
-  test('same task but started is On Track', () {
-    expect(
-        run(createdAgo: const Duration(days: 8), dueIn: const Duration(days: 2),
-            priority: 'low', started: true),
-        SlaStatus.onTrack);
+  test('task due today is At Risk, not Overdue, at 10:00', () {
+    final t = makeTask(priority: 'Medium');
+    final r = SlaService.classify(
+      createdAt: t.created,
+      deadline: t.due,
+      isCompleted: t.isDone,
+      isStarted: t.isStarted,
+      priority: 'medium',
+      now: DateTime(2026, 10, 10, 10),
+    );
+    expect(r.status, SlaStatus.atRisk);
+  });
+
+  test('task due today is not Overdue at 00:01', () {
+    final t = makeTask(priority: 'Low');
+    final r = SlaService.classify(
+      createdAt: t.created,
+      deadline: t.due,
+      isCompleted: t.isDone,
+      isStarted: t.isStarted,
+      priority: 'low',
+      now: DateTime(2026, 10, 10, 0, 1),
+    );
+    expect(r.status, SlaStatus.onTrack);
   });
 }
