@@ -3,16 +3,16 @@ import 'routes.dart';
 import 'theme/app_theme.dart';
 
 void main() {
-  runApp(const TaskkeyApp());
+  runApp(const TaskyApp());
 }
 
-class TaskkeyApp extends StatelessWidget {
-  const TaskkeyApp({Key? key}) : super(key: key);
+class TaskyApp extends StatelessWidget {
+  const TaskyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Taskkey - Project & SLA Tracker',
+      title: 'Tasky - Project & SLA Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: AppRoutes.welcome,

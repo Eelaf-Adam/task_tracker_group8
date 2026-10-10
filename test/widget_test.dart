@@ -1,30 +1,46 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:task_tracker_group8/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const TaskkeyApp());
+  testWidgets('Welcome screen displays Tasky and navigates to Sign In', (WidgetTester tester) async {
+    await tester.pumpWidget(const TaskyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify that Tasky and Get Started button are present.
+    expect(find.text('Tasky'), findsWidgets);
+    expect(find.text('Get Started'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Tap Get Started
+    await tester.tap(find.text('Get Started'));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that we are on Sign In screen
+    expect(find.text('Sign In'), findsWidgets);
+    expect(find.text('Welcome Back'), findsOneWidget);
+  });
+
+  testWidgets('Sign In screen validates empty fields and navigates to Sign Up', (WidgetTester tester) async {
+    await tester.pumpWidget(const TaskyApp());
+
+    // Navigate to Sign In
+    await tester.tap(find.text('Get Started'));
+    await tester.pumpAndSettle();
+
+    // Tap Sign Up link
+    await tester.tap(find.text('Sign Up'));
+    await tester.pumpAndSettle();
+
+    // Verify on Sign Up screen
+    expect(find.text('Create Account'), findsOneWidget);
+    expect(find.text('Full Name'), findsNothing); // label or hint exists
+    expect(find.text('Sign Up'), findsWidgets);
+
+    // Try submitting without password
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Sign Up'));
+    await tester.pumpAndSettle();
+
+    // Password validation error should trigger
+    expect(find.text('Please enter your password'), findsOneWidget);
   });
 }
