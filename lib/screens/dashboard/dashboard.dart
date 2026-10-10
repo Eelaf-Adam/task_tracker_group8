@@ -1,19 +1,59 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../theme/apptheme.dart';
+import '../profile/profile.dart';
+import '../tasks/task_form_screen.dart';
+import '../tasks/task_list_screen.dart';
 import '../team/team_members.dart';
 
-class TaskStat {
-  final String label;
-  final int count;
-  final Color color;
-  const TaskStat(this.label, this.count, this.color);
+class ProjectCardData {
+  final String title;
+  final String subtitle;
+  final int done;
+  final int total;
+  final List<TeamMember> team;
+  final bool isDark;
+  const ProjectCardData({
+    required this.title,
+    required this.subtitle,
+    required this.done,
+    required this.total,
+    required this.team,
+    this.isDark = true,
+  });
 }
 
-const _stats = <TaskStat>[
-  TaskStat('On track', 5, AppColors.green),
-  TaskStat('At risk', 3, AppColors.amber),
-  TaskStat('Overdue', 2, AppColors.coral),
-  TaskStat('Completed', 2, AppColors.slate),
+final _projects = <ProjectCardData>[
+  ProjectCardData(
+    title: 'Application Design',
+    subtitle: 'UI Design Kit',
+    done: 50,
+    total: 80,
+    team: members.take(3).toList(),
+    isDark: true,
+  ),
+  ProjectCardData(
+    title: 'Overlay Concept',
+    subtitle: 'UI Design Kit',
+    done: 30,
+    total: 60,
+    team: members.skip(1).take(2).toList(),
+    isDark: false,
+  ),
+];
+
+class ProgressItem {
+  final String category;
+  final String title;
+  final String when;
+  final int percent;
+  const ProgressItem(this.category, this.title, this.when, this.percent);
+}
+
+const _inProgress = <ProgressItem>[
+  ProgressItem('Productivity Mobile App', 'Create Detail Booking', '2 min ago', 60),
+  ProgressItem('Banking Mobile App', 'Revision Home Page', '5 min ago', 70),
+  ProgressItem('Online Course', 'Working On Landing Page', '7 min ago', 80),
 ];
 
 class ActivityItem {
@@ -29,34 +69,6 @@ final _activity = <ActivityItem>[
   ActivityItem(members[3], 'flagged Create Task Model', 'Yesterday'),
 ];
 
-class ProjectCardData {
-  final String title;
-  final String subtitle;
-  final int done;
-  final int total;
-  final List<TeamMember> team;
-  const ProjectCardData(this.title, this.subtitle, this.done, this.total, this.team);
-}
-
-final _projects = <ProjectCardData>[
-  ProjectCardData('UI Design', 'Mobile App', 50, 80, members.take(3).toList()),
-  ProjectCardData('Local Storage', 'Data Layer', 30, 60, members.skip(1).take(3).toList()),
-];
-
-class ProgressItem {
-  final String category;
-  final String title;
-  final String when;
-  final int percent;
-  const ProgressItem(this.category, this.title, this.when, this.percent);
-}
-
-const _inProgress = <ProgressItem>[
-  ProgressItem('Task Tracker App', 'Create Task Model', '2 min ago', 80),
-  ProgressItem('Task Tracker App', 'Revise Home Page', '5 min ago', 70),
-  ProgressItem('Task Tracker App', 'Set Up Local Storage', '7 min ago', 40),
-];
-
 const _pad = EdgeInsets.symmetric(horizontal: 20);
 
 String _dateLabel() {
@@ -67,213 +79,278 @@ String _dateLabel() {
   return '${days[now.weekday - 1]}, ${now.day}';
 }
 
-String _greeting() {
-  final h = DateTime.now().hour;
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final total = _stats.fold<int>(0, (sum, s) => sum + s.count);
-    final firstName = currentUser.name.split(' ').first;
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
 
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _currentNavIndex = 0; // 0: Home, 1: Tasks, 2: Team, 3: Profile
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.base,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 12, bottom: 88),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header: grid button, date, bell
-              Padding(
-                padding: _pad,
-                child: Row(
-                  children: [
-                    const RoundIconButton(icon: Icons.grid_view_rounded, label: 'Menu'),
-                    Expanded(
-                      child: Center(
-                        child: Text(_dateLabel(), style: AppText.headSemi.copyWith(fontSize: 15)),
-                      ),
-                    ),
-                    const RoundIconButton(
-                      icon: Icons.notifications_none_rounded,
-                      label: 'Notifications',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+      body: IndexedStack(
+        index: _currentNavIndex,
+        children: [
+          const _HomeDashboardView(),
+          const TaskListScreen(),
+          const TeamMembersScreen(),
+          ProfileScreen(member: currentUser),
+        ],
+      ),
+      bottomNavigationBar: _BottomNavPottonBar(
+        selectedIndex: _currentNavIndex,
+        onTap: (index) {
+          if (index == 2) {
+            // Center plus button: open Create Task modal
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TaskFormScreen()),
+            );
+          } else {
+            // Map visual slot to tab index:
+            // Slot 0 -> Tab 0 (Home)
+            // Slot 1 -> Tab 1 (Tasks)
+            // Slot 3 -> Tab 2 (Team)
+            // Slot 4 -> Tab 3 (Profile)
+            final tabIndex = index < 2 ? index : index - 1;
+            setState(() => _currentNavIndex = tabIndex);
+          }
+        },
+      ),
+    );
+  }
+}
 
-              // Greeting with decorative dots
-              Padding(
-                padding: _pad,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_greeting()},\n$firstName 👋',
-                        style: AppText.head.copyWith(fontSize: 24, height: 1.3),
-                      ),
-                    ),
-                    const SizedBox(width: 90, height: 64, child: _Dots()),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Padding(
-                padding: _pad,
-                child: Text(
-                  "Here's what's happening with your project.",
-                  style: AppText.bodySoft.copyWith(fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 20),
+/// The Main Dashboard Home Screen View
+class _HomeDashboardView extends StatelessWidget {
+  const _HomeDashboardView();
 
-              // Stat cards (2 x 2)
-              Padding(
-                padding: _pad,
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            label: 'Total tasks',
-                            value: '$total',
-                            icon: Icons.checklist_rounded,
-                            color: AppColors.primary,
-                            tint: AppColors.primaryTint,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            label: 'On track',
-                            value: '${_stats[0].count}',
-                            icon: Icons.check_circle_outline_rounded,
-                            color: AppColors.green,
-                            tint: AppColors.greenTint,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            label: 'At risk',
-                            value: '${_stats[1].count}',
-                            icon: Icons.warning_amber_rounded,
-                            color: AppColors.amber,
-                            tint: AppColors.amberTint,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            label: 'Overdue',
-                            value: '${_stats[2].count}',
-                            icon: Icons.schedule_rounded,
-                            color: AppColors.coral,
-                            tint: AppColors.coralTint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+  @override
+  Widget build(BuildContext context) {
+    // Dynamic user name from AuthService (e.g., 'Lee')
+    final activeUser = AuthService.currentUser;
+    final fullName = (activeUser != null && activeUser.name.trim().isNotEmpty)
+        ? activeUser.name.trim()
+        : currentUser.name;
+    final firstName = fullName.split(RegExp(r'\s+')).first;
 
-              // Project cards: a plain horizontal scroller with fixed-size cards
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: _pad,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < _projects.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      _ProjectCard(project: _projects[i]),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Task overview donut + legend
-              Padding(
-                padding: _pad,
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: AppDecor.card(radius: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Task Overview', style: AppText.headSemi.copyWith(fontSize: 15)),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 120,
-                            height: 120,
-                            child: CustomPaint(
-                              painter: _DonutPainter(_stats, total),
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('$total', style: AppText.head.copyWith(fontSize: 24)),
-                                    Text('Tasks', style: AppText.caption),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                for (final s in _stats) _LegendRow(stat: s),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 12, bottom: 24),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header: grid button, date, bell
+            Padding(
+              padding: _pad,
+              child: Row(
+                children: [
+                  const RoundIconButton(icon: Icons.grid_view_rounded, label: 'Menu'),
+                  Expanded(
+                    child: Center(
+                      child: Text(_dateLabel(), style: AppText.headSemi.copyWith(fontSize: 16)),
+                    ),
                   ),
-                ),
+                  const RoundIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    label: 'Notifications',
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 24),
 
-              // In Progress (cards with percentage rings, like the Home design)
-              const _SectionHeader('In Progress'),
-              const SizedBox(height: 12),
-              Padding(
-                padding: _pad,
-                child: Column(
-                  children: [for (final p in _inProgress) _ProgressRow(item: p)],
-                ),
+            // Greeting with dynamic user name and decorative dots
+            Padding(
+              padding: _pad,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$firstName, Let’s make a\nhabits together 🙌',
+                      style: AppText.head.copyWith(fontSize: 24, height: 1.25, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 60, height: 50, child: _Dots()),
+                ],
               ),
-              const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 22),
 
-              // Recent activity
-              const _SectionHeader('Recent Activity'),
-              const SizedBox(height: 12),
-              Padding(
-                padding: _pad,
-                child: Column(
-                  children: [for (final a in _activity) _ActivityRow(item: a)],
+            // Project cards carousel
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: _pad,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (var i = 0; i < _projects.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 14),
+                    _ProjectCard(project: _projects[i]),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // In Progress Section
+            const _SectionHeader('In Progress'),
+            const SizedBox(height: 12),
+            Padding(
+              padding: _pad,
+              child: Column(
+                children: [for (final p in _inProgress) _ProgressRow(item: p)],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Recent Activity Section
+            const _SectionHeader('Recent Activity'),
+            const SizedBox(height: 12),
+            Padding(
+              padding: _pad,
+              child: Column(
+                children: [for (final a in _activity) _ActivityRow(item: a)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Custom Bottom Navigation Bar matching Image 2
+class _BottomNavPottonBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+
+  const _BottomNavPottonBar({
+    required this.selectedIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Map internal tab index to 5-slot bottom bar index:
+    // Tab 0 -> slot 0 (Home)
+    // Tab 1 -> slot 1 (Tasks)
+    // (slot 2 is Center Plus Button)
+    // Tab 2 -> slot 3 (Team)
+    // Tab 3 -> slot 4 (Profile)
+    int activeSlot = selectedIndex;
+    if (selectedIndex >= 2) activeSlot = selectedIndex + 1;
+
+    return Container(
+      height: 74,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.12), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            // 0: Home
+            _navIconButton(
+              icon: activeSlot == 0 ? Icons.home_rounded : Icons.home_outlined,
+              isSelected: activeSlot == 0,
+              onTap: () => onTap(0),
+              label: 'Home',
+            ),
+
+            // 1: Tasks (Clipboard Task Icon)
+            _navIconButton(
+              icon: activeSlot == 1 ? Icons.assignment_rounded : Icons.assignment_outlined,
+              isSelected: activeSlot == 1,
+              onTap: () => onTap(1),
+              label: 'Tasks',
+            ),
+
+            // 2: Center Plus Button (Add Task)
+            GestureDetector(
+              onTap: () => onTap(2),
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6B60F5), Color(0xFF5548EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6B60F5).withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 28,
                 ),
               ),
-            ],
+            ),
+
+            // 3: Team (Team / Group Members Icon)
+            _navIconButton(
+              icon: activeSlot == 3 ? Icons.groups_rounded : Icons.groups_outlined,
+              isSelected: activeSlot == 3,
+              onTap: () => onTap(3),
+              label: 'Team',
+            ),
+
+            // 4: Profile
+            _navIconButton(
+              icon: activeSlot == 4 ? Icons.person_rounded : Icons.person_outline_rounded,
+              isSelected: activeSlot == 4,
+              onTap: () => onTap(4),
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navIconButton({
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required String label,
+  }) {
+    return Semantics(
+      label: label,
+      button: true,
+      selected: isSelected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+          child: Icon(
+            icon,
+            size: 26,
+            color: isSelected ? const Color(0xFF5B51DD) : const Color(0xFF94A3B8),
           ),
         ),
       ),
@@ -299,7 +376,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Small decorative dots next to the greeting (fixed-size, so always safe).
+/// Small decorative dots next to the greeting
 class _Dots extends StatelessWidget {
   const _Dots();
 
@@ -313,50 +390,10 @@ class _Dots extends StatelessWidget {
 
     return Stack(
       children: [
-        Positioned(right: 40, top: 0, child: dot(AppColors.amber, 6)),
-        Positioned(right: 4, top: 16, child: dot(AppColors.primary, 10)),
-        Positioned(right: 56, top: 42, child: dot(AppColors.coral, 5)),
+        Positioned(right: 28, top: 2, child: dot(AppColors.amber, 7)),
+        Positioned(right: 0, top: 12, child: dot(AppColors.primary, 10)),
+        Positioned(right: 38, top: 28, child: dot(AppColors.coral, 6)),
       ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final Color tint;
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.tint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: tint,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: color),
-              const SizedBox(width: 8),
-              Text(value, style: AppText.head.copyWith(fontSize: 20)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: AppText.bodySoft.copyWith(fontSize: 12)),
-        ],
-      ),
     );
   }
 }
@@ -368,15 +405,29 @@ class _ProjectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = project.total == 0 ? 0.0 : project.done / project.total;
-    final softWhite = Colors.white.withValues(alpha: 0.75);
+    final isDark = project.isDark;
+
+    final bgColor = isDark ? const Color(0xFF6356F5) : Colors.white;
+    final titleColor = isDark ? Colors.white : AppColors.ink;
+    final subtitleColor = isDark ? Colors.white.withValues(alpha: 0.75) : AppColors.inkSoft;
+    final progressTrack = isDark ? Colors.white.withValues(alpha: 0.25) : AppColors.line;
+    final progressFill = isDark ? Colors.white : const Color(0xFF6356F5);
 
     return Container(
       width: 270,
-      height: 150,
+      height: 154,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: bgColor,
         borderRadius: BorderRadius.circular(22),
+        border: isDark ? null : Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? const Color(0xFF6356F5).withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -386,22 +437,22 @@ class _ProjectCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(project.title,
-                  style: AppText.head.copyWith(fontSize: 17, color: Colors.white)),
+                  style: AppText.head.copyWith(fontSize: 17, color: titleColor)),
               const SizedBox(height: 2),
               Text(project.subtitle,
-                  style: AppText.bodySoft.copyWith(fontSize: 12, color: softWhite)),
+                  style: AppText.bodySoft.copyWith(fontSize: 12, color: subtitleColor)),
             ],
           ),
           Row(
             children: [
-              _AvatarStack(team: project.team),
+              _AvatarStack(team: project.team, borderColor: isDark ? Colors.white : Colors.white),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text('Progress',
-                        style: AppText.bodySoft.copyWith(fontSize: 11, color: softWhite)),
+                        style: AppText.bodySoft.copyWith(fontSize: 11, color: subtitleColor)),
                     const SizedBox(height: 4),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
@@ -409,8 +460,8 @@ class _ProjectCard extends StatelessWidget {
                         height: 5,
                         child: LinearProgressIndicator(
                           value: progress,
-                          backgroundColor: Colors.white.withValues(alpha: 0.25),
-                          color: Colors.white,
+                          backgroundColor: progressTrack,
+                          color: progressFill,
                         ),
                       ),
                     ),
@@ -419,7 +470,7 @@ class _ProjectCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text('${project.done}/${project.total}',
-                  style: AppText.headSemi.copyWith(fontSize: 12, color: Colors.white)),
+                  style: AppText.headSemi.copyWith(fontSize: 12, color: titleColor)),
             ],
           ),
         ],
@@ -430,7 +481,8 @@ class _ProjectCard extends StatelessWidget {
 
 class _AvatarStack extends StatelessWidget {
   final List<TeamMember> team;
-  const _AvatarStack({required this.team});
+  final Color borderColor;
+  const _AvatarStack({required this.team, required this.borderColor});
 
   @override
   Widget build(BuildContext context) {
@@ -444,32 +496,8 @@ class _AvatarStack extends StatelessWidget {
           for (var i = 0; i < team.length; i++)
             Positioned(
               left: i * overlap,
-              child: MemberAvatar(member: team[i], size: size, borderColor: Colors.white),
+              child: MemberAvatar(member: team[i], size: size, borderColor: borderColor),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendRow extends StatelessWidget {
-  final TaskStat stat;
-  const _LegendRow({required this.stat});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: stat.color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(stat.label, style: AppText.bodySoft.copyWith(fontSize: 13))),
-          Text('${stat.count}', style: AppText.headSemi.copyWith(fontSize: 13)),
         ],
       ),
     );
@@ -562,39 +590,4 @@ class _ActivityRow extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Simple donut chart drawn with arcs, no chart package required.
-class _DonutPainter extends CustomPainter {
-  final List<TaskStat> stats;
-  final int total;
-  _DonutPainter(this.stats, this.total);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const strokeWidth = 14.0;
-    const gap = 0.05; // small gap between segments, in radians
-    final rect = Rect.fromLTWH(
-      strokeWidth / 2,
-      strokeWidth / 2,
-      size.width - strokeWidth,
-      size.height - strokeWidth,
-    );
-    double startAngle = -1.5708; // start at the top
-    for (final s in stats) {
-      final sweep = total == 0 ? 0.0 : (s.count / total) * 6.28319;
-      final paint = Paint()
-        ..color = s.color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.butt;
-      final drawSweep = sweep > gap ? sweep - gap : sweep;
-      canvas.drawArc(rect, startAngle + gap / 2, drawSweep, false, paint);
-      startAngle += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DonutPainter oldDelegate) =>
-      oldDelegate.total != total || oldDelegate.stats != stats;
 }

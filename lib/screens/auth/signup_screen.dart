@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../routes.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -11,11 +13,12 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController(text: 'Albert Einstein');
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,40 +29,49 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _handleSignUp() async {
+    setState(() => _errorMessage = null);
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    // Simulate account registration
-    await Future.delayed(const Duration(milliseconds: 700));
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Account created successfully! Welcome to Tasky.'),
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-      ),
+    final result = await AuthService.register(
+      name: name,
+      email: email,
+      password: password,
     );
 
-    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-  }
-
-  Future<void> _handleSocialAuth(String provider) async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
     setState(() => _isLoading = false);
+
+    if (!result.success) {
+      setState(() => _errorMessage = result.message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    await AuthService.saveRememberMe(enabled: true, email: email);
+
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Registered with $provider successfully!'),
-        backgroundColor: AppTheme.primaryColor,
+        content: Text('Account created successfully! Welcome, ${result.user?.name ?? ''}.'),
+        backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
       ),
     );
+
     Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
   }
 
@@ -109,28 +121,50 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Please enter your information to create your account',
+                      'Please enter your name, email and password to sign up',
                       style: TextStyle(fontSize: 13, color: AppTheme.greyText),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-                    // Full Name Field
+                    // Error Banner if email already exists
+                    if (_errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFB91C1C),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+
+                    // Full Name Field (must start with capital letter)
                     TextFormField(
                       controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
                       style: const TextStyle(fontSize: 14, color: AppTheme.darkText, fontWeight: FontWeight.w500),
                       decoration: const InputDecoration(
-                        hintText: 'Enter your full name',
+                        hintText: 'Enter your name',
                         prefixIcon: Icon(Icons.person_outline, color: AppTheme.greyText, size: 20),
                       ),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return 'Please enter your full name';
-                        }
-                        if (val.trim().length < 2) {
-                          return 'Name must be at least 2 characters';
-                        }
-                        return null;
-                      },
+                      validator: AppValidators.validateName,
                     ),
                     const SizedBox(height: 16),
 
@@ -143,19 +177,11 @@ class _SignupScreenState extends State<SignupScreen> {
                         hintText: 'Enter your email',
                         prefixIcon: Icon(Icons.email_outlined, color: AppTheme.greyText, size: 20),
                       ),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return 'Please enter your email address';
-                        }
-                        if (!val.contains('@') || !val.contains('.')) {
-                          return 'Please enter a valid email address';
-                        }
-                        return null;
-                      },
+                      validator: AppValidators.validateEmail,
                     ),
                     const SizedBox(height: 16),
 
-                    // Password Field
+                    // Password Field (regex rules: numbers, letters, special char, length 8-12)
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -172,17 +198,19 @@ class _SignupScreenState extends State<SignupScreen> {
                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
-                      validator: (val) {
-                        if (val == null || val.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        if (val.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-                        return null;
-                      },
+                      validator: AppValidators.validatePassword,
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 8),
+
+                    // Password requirements note
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        '8-12 chars, letters, numbers, and at least one special character',
+                        style: TextStyle(fontSize: 11, color: AppTheme.greyText),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
                     // Sign Up Button
                     ElevatedButton(
@@ -198,36 +226,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             )
                           : const Text('Sign Up'),
                     ),
-                    const SizedBox(height: 24),
-
-                    // Divider "Signup With"
-                    const Center(
-                      child: Text(
-                        'Signup With',
-                        style: TextStyle(color: AppTheme.greyText, fontSize: 13),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Social Icons Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _socialButton(
-                          icon: Icons.apple,
-                          label: 'Apple',
-                          onTap: () => _handleSocialAuth('Apple'),
-                        ),
-                        const SizedBox(width: 16),
-                        _socialButton(
-                          icon: Icons.g_mobiledata,
-                          label: 'Google',
-                          isGoogle: true,
-                          onTap: () => _handleSocialAuth('Google'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
                     // Footer: Have an Account? Sign In
                     Row(
@@ -258,34 +257,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _socialButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool isGoogle = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 68,
-          height: 52,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Icon(
-            icon,
-            color: isGoogle ? Colors.redAccent : AppTheme.darkText,
-            size: isGoogle ? 34 : 26,
           ),
         ),
       ),

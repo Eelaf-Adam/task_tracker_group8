@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../routes.dart';
+import '../../services/auth_service.dart';
 import '../../theme/apptheme.dart';
 import '../team/team_members.dart';
 
@@ -61,7 +63,12 @@ class ProfileScreen extends StatelessWidget {
                 boxShadow: AppDecor.glow,
               ),
               child: ElevatedButton(
-                onPressed: () => _soon(context, 'Log out'),
+                onPressed: () async {
+                  await AuthService.signOut();
+                  if (context.mounted) {
+                    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.signin, (route) => false);
+                  }
+                },
                 child: const Text('Log Out'),
               ),
             ),

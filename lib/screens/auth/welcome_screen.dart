@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../routes.dart';
-import '../../theme/app_theme.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -9,143 +8,62 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isShortScreen = size.height < 650;
+    final topHeight = isShortScreen ? size.height * 0.44 : size.height * 0.52;
 
     return Scaffold(
-      backgroundColor: AppTheme.primaryColor,
+      backgroundColor: const Color(0xFF5348DE),
       body: Stack(
         children: [
-          // Top Background Graphic Section
+          // 1. Top Background & 3D Illustration Area
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: isShortScreen ? size.height * 0.40 : size.height * 0.52,
+            height: topHeight,
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF5B51DD), Color(0xFF8B82FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF4C43DF), Color(0xFF6B60F5), Color(0xFF867BFD)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top App Icon & Brand Pill
-                      Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(Icons.check_circle_rounded, color: AppTheme.primaryColor, size: 22),
-                          ),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'Tasky',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      // Center Illustration Graphic
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.task_alt, color: AppTheme.primaryColor, size: 24),
-                              ),
-                              const SizedBox(width: 14),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Project Sprint 2026',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    SizedBox(height: 3),
-                                    Text(
-                                      'SLA: 100% on schedule',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'Active',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Centered dashboard icon as liked by the user
+                  Center(
+                    child: Icon(
+                      Icons.dashboard_customize_rounded,
+                      size: 96,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+
+                  // Subtle gradient overlay for blending
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.1),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
 
-          // Bottom Curved Content Card
+          // 2. Bottom Curved Content Card
           Positioned(
-            top: isShortScreen ? size.height * 0.38 : size.height * 0.44,
+            top: topHeight - 28,
             left: 0,
             right: 0,
             bottom: 0,
@@ -153,14 +71,14 @@ class WelcomeScreen extends StatelessWidget {
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(36),
-                  topRight: Radius.circular(36),
+                  topLeft: Radius.circular(34),
+                  topRight: Radius.circular(34),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 20,
-                    offset: Offset(0, -5),
+                    color: Color(0x1A000000),
+                    blurRadius: 24,
+                    offset: Offset(0, -6),
                   ),
                 ],
               ),
@@ -171,56 +89,76 @@ class WelcomeScreen extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 480),
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 8),
-                          // App Title
+
+                          // App Title / Brand
                           const Text(
-                            'Tasky',
+                            'Taskey',
                             style: TextStyle(
-                              fontSize: 32,
+                              fontSize: 34,
                               fontWeight: FontWeight.w800,
-                              color: AppTheme.primaryColor,
+                              color: Color(0xFF5B51DD),
                               letterSpacing: 0.5,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
                           // Headline
                           const Text(
                             'Building Better\nWorkplaces',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.darkText,
-                              height: 1.2,
+                              fontSize: 27,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1E293B),
+                              height: 1.25,
+                              letterSpacing: -0.3,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
                           // Subtitle
                           const Text(
-                            'Create a unique emotional story that describes better than words',
+                            'Create a unique emotional story that\ndescribes better than words',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
-                              color: AppTheme.greyText,
-                              height: 1.4,
+                              color: Color(0xFF94A3B8),
+                              height: 1.5,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 32),
 
                           // Get Started Button
                           ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6356F5),
+                              foregroundColor: Colors.white,
+                              elevation: 6,
+                              shadowColor: const Color(0xFF6356F5).withValues(alpha: 0.45),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
                             onPressed: () {
                               Navigator.pushNamed(context, AppRoutes.signin);
                             },
-                            child: const Text('Get Started'),
+                            child: const Text(
+                              'Get Started',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
