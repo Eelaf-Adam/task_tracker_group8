@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../theme/apptheme.dart';
 import '../profile/profile.dart';
 class TeamMember {
@@ -50,8 +51,27 @@ const members = <TeamMember>[
   ),
 ];
 
+TeamMember getCurrentTeamMember() {
+  final user = AuthService.currentUser;
+  if (user != null && user.name.trim().isNotEmpty) {
+    final parts = user.name.trim().split(RegExp(r'\s+'));
+    final initials = parts.length > 1
+        ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
+        : (user.name.trim().length >= 2
+            ? user.name.trim().substring(0, 2).toUpperCase()
+            : user.name.trim().toUpperCase());
+    return TeamMember(
+      initials: initials,
+      name: user.name.trim(),
+      role: 'Project Member',
+      roleColor: RoleColor.designer,
+    );
+  }
+  return members[0];
+}
+
 /// The logged-in user, shown on the Profile tab by default.
-final currentUser = members[0]; // John Doe
+TeamMember get currentUser => getCurrentTeamMember();
 
 /// Round, thin-bordered icon button used in screen headers
 /// (back button, add button, bell...). Shared by the other screens.

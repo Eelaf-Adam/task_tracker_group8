@@ -1,18 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import '../../models/task.dart';
 import '../../services/sla_service.dart';
 import '../../services/storage_service.dart';
-import '../../widgets/filter_pills.dart';
-import '../../widgets/task_card.dart';
-import 'task_details_screen.dart';
+import '../../theme/apptheme.dart';
 import 'task_form_screen.dart';
 
-/// Task List sorted by urgency: Overdue → At Risk → On Track → Completed,
-/// then by nearest deadline. Search, plus filters for SLA status, task
-/// status and priority (they combine).
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
 
@@ -21,242 +13,282 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-  final _search = TextEditingController();
   List<Task> _tasks = [];
-  bool _loading = true;
-  String? _error;
-  String _query = '';
-  SlaStatus? _sla; // null = All
-  String _status = 'All';
-  String _priority = 'All';
-  Timer? _ticker;
+  bool _isLoading = true;
+  String _filter = 'All'; // 'All', 'To Do', 'In Progress', 'Done'
 
   @override
   void initState() {
     super.initState();
-    _load();
-    // SLA depends on the clock, so re-check every minute.
-    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    _loadTasks();
   }
 
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    _search.dispose();
-    super.dispose();
-  }
+  Future<void> _loadTasks() async {
+    setState(() => _isLoading = true);
+    final tasks = await StorageService.loadTasks();
 
-  Future<void> _load() async {
-    try {
-      final tasks = await StorageService.loadTasks();
-      if (!mounted) return;
-      setState(() {
-        _tasks = tasks;
-        _error = null;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Tasks could not be loaded';
-        _loading = false;
-      });
+    // If no tasks exist yet, seed some initial sample tasks
+    if (tasks.isEmpty) {
+      final now = DateTime.now();
+      final sampleTasks = [
+        Task(
+          id: '1',
+          title: 'Create Detail Booking',
+          description: 'Design and implement detailed booking flow for productivity app',
+          assignedTo: 'Lee',
+          dueDate: now.add(const Duration(days: 2)),
+          priority: 'High',
+          status: 'In Progress',
+        ),
+        Task(
+          id: '2',
+          title: 'Revision Home Page',
+          description: 'Refactor home page widgets according to client feedback',
+          assignedTo: 'Sarah Lee',
+          dueDate: now.add(const Duration(days: 3)),
+          priority: 'Medium',
+          status: 'In Progress',
+        ),
+        Task(
+          id: '3',
+          title: 'Working On Landing Page',
+          description: 'Complete hero section and feature grid for online course',
+          assignedTo: 'Michael Kim',
+          dueDate: now.add(const Duration(days: 5)),
+          priority: 'Low',
+          status: 'In Progress',
+        ),
+      ];
+      await StorageService.saveTasks(sampleTasks);
+      _tasks = sampleTasks;
+    } else {
+      _tasks = tasks;
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _openDetails(Task task) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TaskDetailsScreen(task: task)),
-    );
-    _load(); // refresh after status changes, edits or deletes
+  List<Task> get _filteredTasks {
+    if (_filter == 'All') return _tasks;
+    return _tasks.where((t) => t.status == _filter).toList();
   }
 
-  Future<void> _createTask() async {
+  Future<void> _openCreateTask() async {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const TaskFormScreen()),
     );
-    _load();
+    _loadTasks();
   }
 
-  /// Search (title, description, assignee) + Status + Priority filters.
-  bool _matches(Task t) {
-    if (_status != 'All' && t.statusLabel != _status) return false;
-    if (_priority != 'All' && t.priorityLabel != _priority) return false;
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    return t.title.toLowerCase().contains(q) ||
-        t.details.toLowerCase().contains(q) ||
-        t.assigneeName.toLowerCase().contains(q);
+  Future<void> _openEditTask(Task task) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TaskFormScreen(task: task)),
+    );
+    _loadTasks();
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final muted = scheme.onSurfaceVariant;
-
-    // SLA is computed once per build, then filtered and sorted.
-    final entries = [
-      for (final t in _tasks)
-        if (_matches(t)) (task: t, sla: t.sla),
-    ];
-    int count(SlaStatus? s) => s == null
-        ? entries.length
-        : entries.where((e) => e.sla.status == s).length;
-    final visible = entries
-        .where((e) => _sla == null || e.sla.status == _sla)
-        .toList()
-      ..sort((a, b) {
-        final byUrgency = SlaService.urgencyRank(a.sla.status)
-            .compareTo(SlaService.urgencyRank(b.sla.status));
-        return byUrgency != 0 ? byUrgency : a.task.due.compareTo(b.task.due);
-      });
-
-    final slaPills = [
-      FilterPillData('All (${count(null)})', _sla == null,
-          () => setState(() => _sla = null)),
-      for (final s in [
-        SlaStatus.overdue,
-        SlaStatus.atRisk,
-        SlaStatus.onTrack,
-        SlaStatus.completed,
-      ])
-        FilterPillData('${s.label} (${count(s)})', _sla == s,
-            () => setState(() => _sla = s),
-            dot: s.color),
-    ];
-    final statusPills = [
-      for (final s in ['All', ...kStatuses])
-        FilterPillData(s, _status == s, () => setState(() => _status = s)),
-    ];
-    final priorityPills = [
-      for (final p in ['All', 'Low', 'Medium', 'High'])
-        FilterPillData(p, _priority == p, () => setState(() => _priority = p)),
-    ];
-
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        toolbarHeight: 72,
-        titleSpacing: 24,
-        title: const Text(
-          'My Tasks',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: Center(
-              child: Text(
-                _tasks.length == 1 ? '1 task' : '${_tasks.length} tasks',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w500, color: muted),
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createTask,
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'New Task',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: Column(
-        children: [
-          if (_tasks.isNotEmpty) ...[
+      backgroundColor: AppColors.base,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TaskSearchField(
-                controller: _search,
-                hasText: _query.isNotEmpty,
-                onChanged: (v) => setState(() => _query = v),
-                onClear: () {
-                  _search.clear();
-                  setState(() => _query = '');
-                },
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+              child: Row(
+                children: [
+                  const SizedBox(width: 40),
+                  Expanded(
+                    child: Center(
+                      child: Text('My Tasks', style: AppText.headSemi.copyWith(fontSize: 18)),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _openCreateTask,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryTint,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.add, color: AppColors.primary, size: 22),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            FilterPillRow(pills: slaPills),
-            const SizedBox(height: 10),
-            FilterPillRow(pills: statusPills),
-            const SizedBox(height: 10),
-            FilterPillRow(pills: priorityPills),
-            const SizedBox(height: 12),
-          ],
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: _buildBody(visible),
+
+            // Filter Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              child: Row(
+                children: ['All', 'To Do', 'In Progress', 'Done'].map((status) {
+                  final isSelected = _filter == status;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(status),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() => _filter = status),
+                      selectedColor: AppColors.primary,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : AppColors.inkSoft,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      side: BorderSide(
+                        color: isSelected ? AppColors.primary : AppColors.line,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildBody(List<({Task task, SlaResult sla})> visible) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return _message(Icons.cloud_off, _error!, 'Pull down to try again');
-    }
-    if (_tasks.isEmpty) {
-      return _message(
-          Icons.inbox_outlined, 'No tasks yet', 'Tap + to add your first task');
-    }
-    if (visible.isEmpty) {
-      return _query.trim().isNotEmpty
-          ? _message(Icons.search_off, 'No tasks match "${_query.trim()}"',
-              'Try a different search or filter')
-          : _message(Icons.filter_alt_off_outlined, 'No tasks here',
-              'Try a different filter');
-    }
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100), // room for the FAB
-      itemCount: visible.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
-      itemBuilder: (_, i) => TaskCard(
-        task: visible[i].task,
-        sla: visible[i].sla,
-        onTap: () => _openDetails(visible[i].task),
-      ),
-    );
-  }
+            // Task List
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                  : _filteredTasks.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.checklist_rounded, size: 64, color: AppColors.inkSoft.withValues(alpha: 0.4)),
+                              const SizedBox(height: 12),
+                              Text('No tasks in this category', style: AppText.headSemi.copyWith(fontSize: 15)),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: _openCreateTask,
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add Task'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadTasks,
+                          color: AppColors.primary,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 96),
+                            itemCount: _filteredTasks.length,
+                            itemBuilder: (context, index) {
+                              final task = _filteredTasks[index];
+                              final isDone = task.status == 'Done' || task.isCompleted;
+                              final sla = SlaService.classify(
+                                createdAt: DateTime.now().subtract(const Duration(days: 1)),
+                                deadline: task.dueDate,
+                                isCompleted: isDone,
+                                isStarted: task.status == 'In Progress',
+                                priority: task.priority,
+                              );
 
-  /// Uses a ListView so pull-to-refresh still works on empty/error states.
-  Widget _message(IconData icon, String title, String subtitle) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 80),
-        Icon(icon, size: 64, color: muted),
-        const SizedBox(height: 12),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(color: muted, fontWeight: FontWeight.w600),
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: AppDecor.card(),
+                                child: InkWell(
+                                  onTap: () => _openEditTask(task),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: sla.status.color.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(sla.status.icon, size: 13, color: sla.status.color),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  sla.status.label,
+                                                  style: TextStyle(
+                                                    color: sla.status.color,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            task.priority,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: task.priority == 'High'
+                                                  ? Colors.redAccent
+                                                  : (task.priority == 'Medium' ? Colors.orange : Colors.blueGrey),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        task.title,
+                                        style: AppText.headSemi.copyWith(
+                                          fontSize: 15,
+                                          decoration: isDone ? TextDecoration.lineThrough : null,
+                                        ),
+                                      ),
+                                      if (task.description.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          task.description,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppText.bodySoft.copyWith(fontSize: 12),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.person_outline, size: 14, color: AppColors.inkSoft),
+                                          const SizedBox(width: 4),
+                                          Text(task.assignedTo, style: AppText.caption),
+                                          const Spacer(),
+                                          const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.inkSoft),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Due: ${task.dueDate.day}/${task.dueDate.month}',
+                                            style: AppText.caption,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(subtitle,
-            textAlign: TextAlign.center, style: TextStyle(color: muted)),
-      ],
+      ),
     );
   }
 }

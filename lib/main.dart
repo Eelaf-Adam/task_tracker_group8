@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+import 'services/auth_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.init();
   runApp(const TaskyApp());
 }
 
