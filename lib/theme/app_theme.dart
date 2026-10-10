@@ -11,11 +11,11 @@ class AppTheme {
     useMaterial3: true,
     scaffoldBackgroundColor: Colors.white,
     primaryColor: primaryColor,
-    fontFamily: 'Poppins', // Make sure to add Poppins or default to sans-serif
+    fontFamily: 'Poppins',
     colorScheme: ColorScheme.fromSeed(
       seedColor: primaryColor,
       primary: primaryColor,
-      background: Colors.white,
+      surface: Colors.white,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -26,7 +26,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
         ),
         elevation: 8,
-        shadowColor: primaryColor.withOpacity(0.4),
+        shadowColor: primaryColor.withValues(alpha: 0.4),
         textStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -49,6 +49,14 @@ class AppTheme {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: primaryColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.0),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
     ),
   );
