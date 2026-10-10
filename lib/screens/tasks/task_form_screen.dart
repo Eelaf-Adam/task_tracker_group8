@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
-import '../models/task.dart';
-import '../storage/task_storage.dart';
+import '../../models/task.dart';
+import '../../services/storage_service.dart';
 
-class EditTaskScreen extends StatefulWidget {
-  final Task task;
+/// Create/Edit form for tasks.
+/// - TaskFormScreen()            -> create a new task
+/// - TaskFormScreen(task: task)  -> edit an existing task
+class TaskFormScreen extends StatefulWidget {
+  final Task? task;
 
-  const EditTaskScreen({super.key, required this.task});
+  const TaskFormScreen({super.key, this.task});
 
   @override
-  State<EditTaskScreen> createState() => _EditTaskScreenState();
+  State<TaskFormScreen> createState() => _TaskFormScreenState();
 }
 
-class _EditTaskScreenState extends State<EditTaskScreen> {
+class _TaskFormScreenState extends State<TaskFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
 
+  // Placeholder list until Member 4's real Team Members data is wired in
   final List<String> _teamMembers = ['Alice', 'Benjamin', 'Chidi', 'Diane'];
   final List<String> _statuses = ['To Do', 'In Progress', 'Done'];
 
@@ -25,15 +29,24 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   late String _priority;
   late String _status;
 
+  bool get _isEditing => widget.task != null;
+
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.task.title);
-    _descriptionController = TextEditingController(text: widget.task.description);
-    _assignedTo = widget.task.assignedTo;
-    _dueDate = widget.task.dueDate;
-    _priority = widget.task.priority;
-    _status = widget.task.status;
+    final task = widget.task;
+    _titleController = TextEditingController(text: task?.title ?? '');
+    _descriptionController =
+        TextEditingController(text: task?.description ?? '');
+    _assignedTo = task?.assignedTo;
+    _dueDate = task?.dueDate;
+    _priority = task?.priority ?? 'Medium';
+    _status = task?.status ?? 'To Do';
+
+    // Avoid a dropdown error if the saved person is not in the list
+    if (_assignedTo != null && !_teamMembers.contains(_assignedTo)) {
+      _teamMembers.add(_assignedTo!);
+    }
   }
 
   @override
@@ -44,10 +57,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   }
 
   Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
+      initialDate: _dueDate ?? today,
+      firstDate: _isEditing ? DateTime(2020) : today,
       lastDate: DateTime(2100),
     );
     if (picked != null) {
@@ -57,7 +72,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     }
   }
 
-  Future<void> _updateTask() async {
+  Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_assignedTo == null) {
@@ -74,8 +89,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       return;
     }
 
-    final updatedTask = Task(
-      id: widget.task.id,
+    final task = Task(
+      id: widget.task?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       assignedTo: _assignedTo!,
@@ -85,11 +100,19 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       isCompleted: _status == 'Done',
     );
 
-    await TaskStorage.updateTask(updatedTask);
+    if (_isEditing) {
+      await StorageService.updateTask(task);
+    } else {
+      await StorageService.addTask(task);
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task updated successfully')),
+      SnackBar(
+        content: Text(
+          _isEditing ? 'Task updated successfully' : 'Task created successfully',
+        ),
+      ),
     );
     Navigator.pop(context);
   }
@@ -115,7 +138,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
     if (confirm != true) return;
 
-    await TaskStorage.deleteTask(widget.task.id);
+    await StorageService.deleteTask(widget.task!.id);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -128,13 +151,14 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Task'),
+        title: Text(_isEditing ? 'Edit Task' : 'Create Task'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _deleteTask,
-            tooltip: 'Delete task',
-          ),
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _deleteTask,
+              tooltip: 'Delete task',
+            ),
         ],
       ),
       body: Padding(
@@ -170,7 +194,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                 initialValue: _assignedTo,
                 decoration: const InputDecoration(labelText: 'Assign To'),
                 items: _teamMembers
-                    .map((name) => DropdownMenuItem(value: name, child: Text(name)))
+                    .map((name) =>
+                        DropdownMenuItem(value: name, child: Text(name)))
                     .toList(),
                 onChanged: (value) {
                   setState(() {
@@ -206,23 +231,26 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                   });
                 },
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: _statuses
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _status = value!;
-                  });
-                },
-              ),
+              // Status only matters when editing; new tasks start as 'To Do'
+              if (_isEditing) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _status,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: _statuses
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _status = value!;
+                    });
+                  },
+                ),
+              ],
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _updateTask,
-                child: const Text('Update Task'),
+                onPressed: _saveTask,
+                child: Text(_isEditing ? 'Update Task' : 'Save Task'),
               ),
             ],
           ),

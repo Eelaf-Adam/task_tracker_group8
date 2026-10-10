@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task.dart';
 
-class TaskStorage {
+class StorageService {
   static const _key = 'tasks';
 
   static Future<void> saveTasks(List<Task> tasks) async {
