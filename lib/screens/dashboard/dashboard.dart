@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../theme/apptheme.dart';
@@ -5,6 +6,7 @@ import '../profile/profile.dart';
 import '../tasks/task_form_screen.dart';
 import '../tasks/task_list_screen.dart';
 import '../team/team_members.dart';
+
 
 class ProjectCardData {
   final String title;
@@ -88,6 +90,31 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0; // 0: Home, 1: Tasks, 2: Team, 3: Profile
+  int _listVersion = 0; // bump to reload the task list
+
+  Future<void> _openCreateMenu() async {
+    final choice = await showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => const _CreateMenu(),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'Task') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TaskFormScreen()),
+      );
+      if (mounted) setState(() => _listVersion++);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Create $choice is coming soon')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         index: _currentNavIndex,
         children: [
           const _HomeDashboardView(),
-          const TaskListScreen(),
+          TaskListScreen(key: ValueKey(_listVersion)),
           const TeamMembersScreen(),
           ProfileScreen(member: currentUser),
         ],
@@ -106,11 +133,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         selectedIndex: _currentNavIndex,
         onTap: (index) {
           if (index == 2) {
-            // Center plus button: open Create Task modal
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TaskFormScreen()),
-            );
+            // Center plus button: open the Create menu
+            _openCreateMenu();
           } else {
             // Map visual slot to tab index:
             // Slot 0 -> Tab 0 (Home)
@@ -548,6 +572,138 @@ class _ProgressRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Blurred "Create" menu opened by the center + button.
+class _CreateMenu extends StatelessWidget {
+  const _CreateMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          // Blurred background; tap anywhere outside to close
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: Container(color: Colors.white.withValues(alpha: 0.35)),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTint,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const _CreateMenuItem(
+                          icon: Icons.edit_outlined,
+                          label: 'Create Task',
+                          result: 'Task'),
+                      const _CreateMenuItem(
+                          icon: Icons.add_box_outlined,
+                          label: 'Create Project',
+                          result: 'Project'),
+                      const _CreateMenuItem(
+                          icon: Icons.groups_outlined,
+                          label: 'Create Team',
+                          result: 'Team'),
+                      const _CreateMenuItem(
+                          icon: Icons.schedule,
+                          label: 'Create Event',
+                          result: 'Event'),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.4),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.close,
+                              color: Colors.white, size: 24),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CreateMenuItem extends StatelessWidget {
+  const _CreateMenuItem({
+    required this.icon,
+    required this.label,
+    required this.result,
+  });
+
+  final IconData icon;
+  final String label;
+  final String result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.pop(context, result),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: AppColors.ink),
+              const SizedBox(width: 14),
+              Text(label, style: AppText.headSemi.copyWith(fontSize: 15)),
+            ],
+          ),
+        ),
       ),
     );
   }

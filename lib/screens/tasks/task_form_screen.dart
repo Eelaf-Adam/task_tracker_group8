@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/task.dart';
 import '../../services/storage_service.dart';
+import '../team/team_members.dart' show members;
 
 /// Create/Edit form for tasks.
 /// - TaskFormScreen()            -> create a new task
@@ -14,17 +15,27 @@ class TaskFormScreen extends StatefulWidget {
   State<TaskFormScreen> createState() => _TaskFormScreenState();
 }
 
+const _monthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// "16 Oct 2026"
+String _formatDate(DateTime d) => '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
+
 class _TaskFormScreenState extends State<TaskFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _dueDateController;
 
-  // Placeholder list until Member 4's real Team Members data is wired in
-  final List<String> _teamMembers = ['Alice', 'Benjamin', 'Chidi', 'Diane'];
   final List<String> _statuses = ['To Do', 'In Progress', 'Done'];
 
-  String? _assignedTo;
+  // Names of the real team members (from the Team screen)
+  List<String> get _teamNames => members.map((m) => m.name).toList();
+
+  late String _assignedTo; // picked from the list OR typed manually
   DateTime? _dueDate;
   late String _priority;
   late String _status;
@@ -38,21 +49,19 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _titleController = TextEditingController(text: task?.title ?? '');
     _descriptionController =
         TextEditingController(text: task?.description ?? '');
-    _assignedTo = task?.assignedTo;
+    _assignedTo = task?.assignedTo ?? '';
     _dueDate = task?.dueDate;
+    _dueDateController =
+        TextEditingController(text: _dueDate == null ? '' : _formatDate(_dueDate!));
     _priority = task?.priority ?? 'Medium';
     _status = task?.status ?? 'To Do';
-
-    // Avoid a dropdown error if the saved person is not in the list
-    if (_assignedTo != null && !_teamMembers.contains(_assignedTo)) {
-      _teamMembers.add(_assignedTo!);
-    }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _dueDateController.dispose();
     super.dispose();
   }
 
@@ -68,32 +77,20 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     if (picked != null) {
       setState(() {
         _dueDate = picked;
+        _dueDateController.text = _formatDate(picked);
       });
     }
   }
 
   Future<void> _saveTask() async {
+    // Runs every validator (title, description, assignee, due date)
     if (!_formKey.currentState!.validate()) return;
-
-    if (_assignedTo == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please assign this task to someone')),
-      );
-      return;
-    }
-
-    if (_dueDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a due date')),
-      );
-      return;
-    }
 
     final task = Task(
       id: widget.task?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      assignedTo: _assignedTo!,
+      assignedTo: _assignedTo.trim(),
       dueDate: _dueDate!,
       priority: _priority,
       status: _status,
@@ -190,35 +187,56 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _assignedTo,
-                decoration: const InputDecoration(labelText: 'Assign To'),
-                items: _teamMembers
-                    .map((name) =>
-                        DropdownMenuItem(value: name, child: Text(name)))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _assignedTo = value;
-                  });
+
+              // Assign To: pick a team member OR type any name
+              Autocomplete<String>(
+                initialValue: TextEditingValue(text: _assignedTo),
+                optionsBuilder: (TextEditingValue value) {
+                  final query = value.text.trim().toLowerCase();
+                  if (query.isEmpty) return _teamNames;
+                  return _teamNames
+                      .where((name) => name.toLowerCase().contains(query));
+                },
+                onSelected: (String name) => _assignedTo = name,
+                fieldViewBuilder:
+                    (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To',
+                      hintText: 'Pick a team member or type a name',
+                      prefixIcon: Icon(Icons.person_outline),
+                      suffixIcon: Icon(Icons.arrow_drop_down),
+                    ),
+                    onChanged: (value) => _assignedTo = value,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please assign this task to someone';
+                      }
+                      return null;
+                    },
+                  );
                 },
               ),
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _dueDate == null
-                        ? 'No due date selected'
-                        : 'Due: ${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}',
-                  ),
-                  TextButton(
-                    onPressed: _pickDueDate,
-                    child: const Text('Pick Due Date'),
-                  ),
-                ],
+
+              // Due date: looks like an input, opens the calendar when tapped
+              TextFormField(
+                controller: _dueDateController,
+                readOnly: true,
+                onTap: _pickDueDate,
+                decoration: const InputDecoration(
+                  labelText: 'Due date',
+                  hintText: 'Select due date',
+                  prefixIcon: Icon(Icons.calendar_today_outlined),
+                  suffixIcon: Icon(Icons.calendar_month),
+                ),
+                validator: (_) =>
+                    _dueDate == null ? 'Please select a due date' : null,
               ),
               const SizedBox(height: 16),
+
               DropdownButtonFormField<String>(
                 initialValue: _priority,
                 decoration: const InputDecoration(labelText: 'Priority'),
