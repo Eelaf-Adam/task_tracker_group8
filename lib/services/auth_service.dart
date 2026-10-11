@@ -195,6 +195,26 @@ class AuthService {
     );
   }
 
+  /// Update the current active user's profile name
+  static Future<void> updateCurrentUserProfile(String newName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final users = await getRegisteredUsers();
+    if (_activeUser != null) {
+      final normalizedEmail = _activeUser!.email.trim().toLowerCase();
+      final index = users.indexWhere((u) => u.email.trim().toLowerCase() == normalizedEmail);
+      final updated = AppUser(
+        name: newName.trim(),
+        email: _activeUser!.email,
+        password: _activeUser!.password,
+      );
+      if (index != -1) {
+        users[index] = updated;
+        await prefs.setString(_usersKey, jsonEncode(users.map((u) => u.toJson()).toList()));
+      }
+      await setCurrentUser(updated);
+    }
+  }
+
   static const String _rememberMeKey = 'remember_me';
   static const String _savedEmailKey = 'saved_email';
 

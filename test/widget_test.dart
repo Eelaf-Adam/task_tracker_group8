@@ -7,8 +7,8 @@ void main() {
   testWidgets('Welcome screen displays Tasky and navigates to Sign In', (WidgetTester tester) async {
     await tester.pumpWidget(const TaskyApp());
 
-    // Verify that Tasky and Get Started button are present.
-    expect(find.text('Tasky'), findsWidgets);
+    // Verify that Taskey and Get Started button are present.
+    expect(find.text('Taskey'), findsWidgets);
     expect(find.text('Get Started'), findsOneWidget);
 
     // Tap Get Started

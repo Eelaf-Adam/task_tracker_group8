@@ -1,20 +1,19 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../models/task.dart';
 import '../../services/sla_service.dart';
 import '../../services/storage_service.dart';
+import '../../widgets/status_badge.dart';
+import 'task_details_screen.dart';
 
 const _todoColor = Color(0xFFA9CE9B);
 const _progressColor = Color(0xFFFFAA5B);
-const _border = Color(0xFFDADCE5);
+const _completedColor = Color(0xFF6B60F5);
 
-enum _Scope { allTime, thisMonth }
+enum _Scope { today, thisMonth }
 
-/// Task Status: donut chart of To Do / In Progress / Completed, the
-/// completion percentage, and a card per status. "Needs attention" counts
-/// tasks the SLA marks as Overdue or At Risk.
+/// Displays completion rate donut chart, today's schedule, SLA breakdown, and status summaries.
 class TaskStatusScreen extends StatefulWidget {
   const TaskStatusScreen({super.key});
 
@@ -26,8 +25,8 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
   List<Task> _tasks = [];
   bool _loading = true;
   String? _error;
-  _Scope _scope = _Scope.allTime;
-  String _selected = 'Done';
+  _Scope _scope = _Scope.thisMonth;
+  String _selectedStatus = 'Done';
 
   @override
   void initState() {
@@ -54,65 +53,63 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
   }
 
   bool _inScope(Task t) {
-    if (_scope == _Scope.allTime) return true;
     final now = DateTime.now();
+    if (_scope == _Scope.today) {
+      return t.due.year == now.year && t.due.month == now.month && t.due.day == now.day;
+    }
     return t.dueDate.year == now.year && t.dueDate.month == now.month;
   }
 
-  int _attention(List<Task> list) => list.where((t) {
-        final s = t.sla.status;
-        return s == SlaStatus.overdue || s == SlaStatus.atRisk;
-      }).length;
-
-  String _count(int n) => n == 1 ? '1 task' : '$n tasks';
+  List<Task> get _todayTasks {
+    final now = DateTime.now();
+    return _tasks.where((t) {
+      return t.due.year == now.year && t.due.month == now.month && t.due.day == now.day;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     final scoped = _tasks.where(_inScope).toList();
-    List<Task> byStatus(String s) =>
-        scoped.where((t) => t.statusLabel == s).toList();
-    final todo = byStatus('To Do');
-    final progress = byStatus('In Progress');
-    final done = byStatus('Done');
+    final todoTasks = scoped.where((t) => t.statusLabel == 'To Do').toList();
+    final inProgressTasks = scoped.where((t) => t.statusLabel == 'In Progress').toList();
+    final doneTasks = scoped.where((t) => t.statusLabel == 'Done' || t.isDone).toList();
+
     final total = scoped.length;
-    final percent = total == 0 ? 0 : (done.length / total * 100).round();
+    final percent = total == 0 ? 0 : ((doneTasks.length / total) * 100).round();
+
+    // SLA breakdown
+    final onTrackCount = scoped.where((t) => t.sla.status == SlaStatus.onTrack).length;
+    final atRiskCount = scoped.where((t) => t.sla.status == SlaStatus.atRisk).length;
+    final overdueCount = scoped.where((t) => t.sla.status == SlaStatus.overdue).length;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        leadingWidth: 72,
         leading: Navigator.canPop(context)
-            ? Padding(
-                padding: const EdgeInsets.only(left: 20),
-                child: _CircleButton(
-                  icon: Icons.chevron_left,
-                  tooltip: 'Back',
-                  onTap: () => Navigator.pop(context),
-                ),
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF0F172A)),
+                onPressed: () => Navigator.pop(context),
               )
             : null,
         title: const Text(
           'Task Status',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 20),
-            child: PopupMenuButton<_Scope>(
-              tooltip: 'Filter',
-              onSelected: (s) => setState(() => _scope = s),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: _Scope.allTime, child: Text('All time')),
-                PopupMenuItem(value: _Scope.thisMonth, child: Text('This month')),
-              ],
-              child: const _CircleButton(icon: Icons.tune),
-            ),
+          PopupMenuButton<_Scope>(
+            tooltip: 'Select Scope',
+            icon: const Icon(Icons.tune_rounded, color: Color(0xFF0F172A)),
+            onSelected: (s) => setState(() => _scope = s),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: _Scope.thisMonth, child: Text('Monthly')),
+              PopupMenuItem(value: _Scope.today, child: Text('Today')),
+            ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: _loading
@@ -122,23 +119,24 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
                     children: [
+                      // Donut Chart Container
                       Center(
                         child: SizedBox(
-                          width: 240,
-                          height: 240,
+                          width: 210,
+                          height: 210,
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
                               CustomPaint(
-                                size: const Size(240, 240),
-                                painter: _DonutPainter([
-                                  (value: todo.length.toDouble(), color: _todoColor),
-                                  (value: progress.length.toDouble(), color: _progressColor),
-                                  (value: done.length.toDouble(), color: scheme.primary),
-                                ]),
+                                size: const Size(210, 210),
+                                painter: _DonutChartPainter(
+                                  todoValue: todoTasks.length.toDouble(),
+                                  inProgressValue: inProgressTasks.length.toDouble(),
+                                  doneValue: doneTasks.length.toDouble(),
+                                ),
                               ),
                               Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -146,13 +144,18 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
                                   Text(
                                     '$percent%',
                                     style: const TextStyle(
-                                        fontSize: 40, fontWeight: FontWeight.w800),
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0F172A),
+                                      letterSpacing: -0.5,
+                                    ),
                                   ),
                                   Text(
-                                    'Complete',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: scheme.onSurfaceVariant,
+                                    _scope == _Scope.today ? 'Complete Today' : 'Complete',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF94A3B8),
                                     ),
                                   ),
                                 ],
@@ -161,46 +164,198 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+
+                      // Chart Legend
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const _LegendItem(color: _todoColor, label: 'To Do'),
-                          const SizedBox(width: 20),
-                          const _LegendItem(
-                              color: _progressColor, label: 'In Progress'),
-                          const SizedBox(width: 20),
-                          _LegendItem(color: scheme.primary, label: 'Completed'),
+                        children: const [
+                          _LegendDot(color: _todoColor, label: 'To Do'),
+                          SizedBox(width: 18),
+                          _LegendDot(color: _progressColor, label: 'In Progress'),
+                          SizedBox(width: 18),
+                          _LegendDot(color: _completedColor, label: 'Completed'),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
+
+                      // 1. Today's Tasks Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Today Tasks',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            '${_todayTasks.length} task${_todayTasks.length == 1 ? '' : 's'}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (_todayTasks.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'No tasks scheduled for today. Great job!',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+                          ),
+                        )
+                      else
+                        for (final t in _todayTasks) ...[
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => TaskDetailsScreen(task: t)),
+                              ).then((_) => _load());
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  PriorityBadge(
+                                    priority: t.priorityLabel,
+                                    compact: true,
+                                    showSuffix: false,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          t.title,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${t.startTime ?? '09:30 am'} - ${t.endTime ?? '11:00 am'} • ${t.assigneeName}',
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      StatusBadge(status: t.sla.status, compact: true),
+                                      const SizedBox(height: 4),
+                                      WorkflowStatusBadge(status: t.statusLabel, compact: true),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      const SizedBox(height: 26),
+
+                      // 2. SLA Status Breakdown
+                      const Text(
+                        'SLA Status Metrics',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SlaMetricCard(
+                              label: 'On Track',
+                              count: onTrackCount,
+                              color: const Color(0xFF10B981),
+                              icon: Icons.check_circle_outline,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _SlaMetricCard(
+                              label: 'At Risk',
+                              count: atRiskCount,
+                              color: const Color(0xFFF59E0B),
+                              icon: Icons.warning_amber_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _SlaMetricCard(
+                              label: 'Overdue',
+                              count: overdueCount,
+                              color: const Color(0xFFEF4444),
+                              icon: Icons.error_outline,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 26),
+
+                      // 3. Status Overview Section
                       Text(
-                        _scope == _Scope.thisMonth ? 'This month' : 'All time',
+                        _scope == _Scope.today ? 'Today Status Overview' : 'Monthly',
                         style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      _StatusCard(
+                      const SizedBox(height: 12),
+
+                      // Status Summary Cards
+                      _StatusSummaryCard(
                         title: 'Completed',
-                        subtitle: '${_count(done.length)} · $percent% of all tasks',
-                        selected: _selected == 'Done',
-                        onTap: () => setState(() => _selected = 'Done'),
+                        subtitle: '${doneTasks.length} Task now • ${doneTasks.length} Task Completed',
+                        isSelected: _selectedStatus == 'Done',
+                        color: _completedColor,
+                        onTap: () => setState(() => _selectedStatus = 'Done'),
                       ),
-                      const SizedBox(height: 12),
-                      _StatusCard(
+                      const SizedBox(height: 10),
+
+                      _StatusSummaryCard(
                         title: 'In Progress',
-                        subtitle:
-                            '${_count(progress.length)} · ${_attention(progress)} need attention',
-                        selected: _selected == 'In Progress',
-                        onTap: () => setState(() => _selected = 'In Progress'),
+                        subtitle: '${inProgressTasks.length} Task now • ${inProgressTasks.isNotEmpty ? '1' : '0'} started',
+                        isSelected: _selectedStatus == 'In Progress',
+                        color: _progressColor,
+                        onTap: () => setState(() => _selectedStatus = 'In Progress'),
                       ),
-                      const SizedBox(height: 12),
-                      _StatusCard(
+                      const SizedBox(height: 10),
+
+                      _StatusSummaryCard(
                         title: 'To Do',
-                        subtitle:
-                            '${_count(todo.length)} · ${_attention(todo)} need attention',
-                        selected: _selected == 'To Do',
-                        onTap: () => setState(() => _selected = 'To Do'),
+                        subtitle: '${todoTasks.length} Task now • ${todoTasks.isNotEmpty ? '1' : '0'} Upcoming',
+                        isSelected: _selectedStatus == 'To Do',
+                        color: _todoColor,
+                        onTap: () => setState(() => _selectedStatus = 'To Do'),
                       ),
                     ],
                   ),
@@ -209,35 +364,8 @@ class _TaskStatusScreenState extends State<TaskStatusScreen> {
   }
 }
 
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({required this.icon, this.onTap, this.tooltip});
-
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final button = InkWell(
-      customBorder: const CircleBorder(),
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(color: _border),
-        ),
-        child: Icon(icon, size: 24),
-      ),
-    );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({required this.color, required this.label});
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
 
   final Color color;
   final String label;
@@ -248,62 +376,87 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+        ),
       ],
     );
   }
 }
 
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({
+class _StatusSummaryCard extends StatelessWidget {
+  const _StatusSummaryCard({
     required this.title,
     required this.subtitle,
-    required this.selected,
+    required this.isSelected,
+    required this.color,
     required this.onTap,
   });
 
   final String title;
   final String subtitle;
-  final bool selected;
+  final bool isSelected;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
-      side: BorderSide(color: selected ? scheme.primary : _border),
-    );
     return Material(
       color: Colors.white,
-      shape: shape,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        customBorder: shape,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? color : const Color(0xFFE2E8F0),
+              width: isSelected ? 1.5 : 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.more_horiz, color: Color(0xFF94A3B8)),
+            ],
           ),
         ),
       ),
@@ -311,56 +464,101 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-/// Draws the donut: rounded segments with small gaps. One segment alone
-/// becomes a full ring; no tasks gives a grey ring.
-class _DonutPainter extends CustomPainter {
-  _DonutPainter(this.segments);
+class _SlaMetricCard extends StatelessWidget {
+  const _SlaMetricCard({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
 
-  final List<({double value, Color color})> segments;
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
+          Text(
+            '$count',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color),
+          ),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutChartPainter extends CustomPainter {
+  const _DonutChartPainter({
+    required this.todoValue,
+    required this.inProgressValue,
+    required this.doneValue,
+  });
+
+  final double todoValue;
+  final double inProgressValue;
+  final double doneValue;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 30.0;
-    final rect = Rect.fromCircle(
-      center: size.center(Offset.zero),
-      radius: size.width / 2 - stroke / 2,
-    );
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
+    final strokeWidth = 18.0;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    final active = segments.where((s) => s.value > 0).toList();
-    final total = active.fold<double>(0, (sum, s) => sum + s.value);
-
-    if (active.isEmpty) {
-      paint.color = const Color(0xFFE6E8F0);
-      canvas.drawArc(rect, 0, 2 * math.pi, false, paint);
-      return;
-    }
-    if (active.length == 1) {
-      paint.color = active.first.color;
-      canvas.drawArc(rect, -math.pi / 2, 2 * math.pi, false, paint);
+    final total = todoValue + inProgressValue + doneValue;
+    if (total == 0) {
+      final basePaint = Paint()
+        ..color = const Color(0xFFE2E8F0)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth;
+      canvas.drawCircle(center, radius, basePaint);
       return;
     }
 
-    paint.strokeCap = StrokeCap.round;
-    final capAngle = (stroke / 2) / (rect.width / 2); // round cap adds length
-    const gap = 0.10;
-    var start = -math.pi / 2;
-    for (final s in active) {
-      final sweep = s.value / total * 2 * math.pi;
-      final drawn = sweep - 2 * capAngle - gap;
-      paint.color = s.color;
-      if (drawn > 0) {
-        canvas.drawArc(rect, start + capAngle + gap / 2, drawn, false, paint);
-      } else {
-        // Very small slice: show it as a dot.
-        canvas.drawArc(rect, start + sweep / 2, 0.001, false, paint);
-      }
-      start += sweep;
+    final segments = [
+      (value: todoValue, color: _todoColor),
+      (value: inProgressValue, color: _progressColor),
+      (value: doneValue, color: _completedColor),
+    ];
+
+    var startAngle = -math.pi / 2;
+    const gap = 0.06; // gap between segments
+
+    for (final seg in segments) {
+      if (seg.value <= 0) continue;
+      final sweepAngle = (seg.value / total) * 2 * math.pi;
+
+      final paint = Paint()
+        ..color = seg.color
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = strokeWidth;
+
+      canvas.drawArc(rect, startAngle + gap, sweepAngle - gap, false, paint);
+      startAngle += sweepAngle;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DonutPainter old) => true;
+  bool shouldRepaint(covariant _DonutChartPainter old) =>
+      old.todoValue != todoValue ||
+      old.inProgressValue != inProgressValue ||
+      old.doneValue != doneValue;
 }

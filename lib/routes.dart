@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/auth/signin_screen.dart';
 import 'screens/auth/signup_screen.dart';
-import 'screens/dashboard/dashboard.dart';
+import 'screens/dashboard/dashboard_screen.dart';
 
 class AppRoutes {
   static const String welcome = '/';
