@@ -1,4 +1,4 @@
-# Task Tracker & SLA Monitoring System (Group 8)
+# Taskey - Task Tracker & SLA Monitoring System (Group 8)
 
 A modern, cross-platform Flutter application engineered for software teams to track project tasks and monitor Service Level Agreements (SLAs) in real time.
 
