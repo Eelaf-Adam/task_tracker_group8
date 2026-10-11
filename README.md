@@ -84,18 +84,3 @@ Execute unit and widget tests:
 flutter test
 ```
 
----
-
-## Team Contributions & Branches
-
-| Member | Branch | Key Responsibilities |
-| :--- | :--- | :--- |
-| **Eelaf Abuelgasim Abdalla Adam** | `eelaf-branch` | Authentication, Routing, Form Validation, App Theme |
-| **Kenny Ishimwe** | `kenny-screens` | Dashboard Architecture, Dual-Axis Layout, Team Views |
-| **Dianah Shimwa / Murinzi Ben** | `feature/task-management-sla` | SLA Classification Engine, Donut Chart, Storage Service |
-
----
-
-## AI Usage Declaration
-
-This project utilized Google Antigravity / Gemini for initial UI scaffolding and boilerplate regex patterns. All generated code was reviewed, tested, and modified by the team to meet project specifications, resolve edge-case layout constraints, and ensure mathematical accuracy in SLA calculations.
