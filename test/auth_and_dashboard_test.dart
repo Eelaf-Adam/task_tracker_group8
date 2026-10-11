@@ -116,18 +116,17 @@ void main() {
 
       // Verify bottom navigation icons exist
       expect(find.byIcon(Icons.home_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.assignment_outlined), findsOneWidget);
       expect(find.byIcon(Icons.add_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
       expect(find.byIcon(Icons.person_outline_rounded), findsOneWidget);
 
-      // Verify "In Progress" section is kept
-      expect(find.text('In Progress'), findsOneWidget);
+      // Verify "Task Overview" section exists
+      expect(find.text('Task Overview'), findsOneWidget);
       expect(find.text('Application Design'), findsOneWidget);
 
-      // Verify "Here is what's happening" and "Task overview" are removed
+      // Verify old static banner is removed
       expect(find.textContaining("what's happening"), findsNothing);
-      expect(find.text('Task Overview'), findsNothing);
     });
   });
 }

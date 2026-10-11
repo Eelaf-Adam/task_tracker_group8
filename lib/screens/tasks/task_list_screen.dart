@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../models/task.dart';
 import '../../services/sla_service.dart';
 import '../../services/storage_service.dart';
-import '../../widgets/filter_pills.dart';
 import '../../widgets/task_card.dart';
 import 'task_details_screen.dart';
 import 'task_form_screen.dart';
@@ -102,9 +101,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final muted = scheme.onSurfaceVariant;
-
     // SLA is computed once per build, then filtered and sorted.
     final entries = [
       for (final t in _tasks)
@@ -120,97 +116,148 @@ class _TaskListScreenState extends State<TaskListScreen> {
       });
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: false,
-        toolbarHeight: 72,
-        titleSpacing: 24,
+        centerTitle: true,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: const Text(
-          'My Tasks',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+          'Tasks',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: Center(
-              child: Text(
-                _tasks.length == 1 ? '1 task' : '${_tasks.length} tasks',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w500, color: muted),
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.add, size: 26, color: Color(0xFF0F172A)),
+            onPressed: _createTask,
+            tooltip: 'Add Task',
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _createTask,
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'New Task',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
+        backgroundColor: const Color(0xFF6B60F5),
+        foregroundColor: Colors.white,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, size: 28),
       ),
       body: Column(
         children: [
-          if (_tasks.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TaskSearchField(
+          // Search Field
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: TextField(
                 controller: _search,
-                hasText: _query.isNotEmpty,
                 onChanged: (v) => setState(() => _query = v),
-                onClear: () {
-                  _search.clear();
-                  setState(() => _query = '');
-                },
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8), size: 22),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Color(0xFF94A3B8)),
+                          onPressed: () {
+                            _search.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            // Dropdown filters: SLA | Status | Priority
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+          ),
+
+          // Horizontal Filter Pills
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  Expanded(
-                    child: _FilterDropdown(
-                      label: 'SLA',
-                      value: _sla?.label ?? 'All',
-                      options: ['All', for (final s in _slaOptions) s.label],
-                      onChanged: (v) => setState(() {
-                        _sla = v == 'All'
-                            ? null
-                            : _slaOptions.firstWhere((s) => s.label == v);
+                  _filterPill(
+                    label: 'All',
+                    isSelected: _sla == null && _status == 'All',
+                    onTap: () => setState(() {
+                      _sla = null;
+                      _status = 'All';
+                    }),
+                  ),
+                  const SizedBox(width: 8),
+                  for (final s in _slaOptions) ...[
+                    _filterPill(
+                      label: s.label,
+                      isSelected: _sla == s,
+                      onTap: () => setState(() {
+                        _sla = _sla == s ? null : s;
                       }),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _FilterDropdown(
-                      label: 'Status',
-                      value: _status,
-                      options: ['All', ...kStatuses],
-                      onChanged: (v) => setState(() => _status = v),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _FilterDropdown(
-                      label: 'Priority',
-                      value: _priority,
-                      options: const ['All', 'Low', 'Medium', 'High'],
-                      onChanged: (v) => setState(() => _priority = v),
+                    const SizedBox(width: 8),
+                  ],
+                  // Priority popup filter button
+                  PopupMenuButton<String>(
+                    tooltip: 'Filter by priority',
+                    onSelected: (p) => setState(() => _priority = p),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'All', child: Text('Priority: All')),
+                      PopupMenuItem(value: 'Low', child: Text('Priority: Low')),
+                      PopupMenuItem(value: 'Medium', child: Text('Priority: Medium')),
+                      PopupMenuItem(value: 'High', child: Text('Priority: High')),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: _priority != 'All' ? const Color(0xFF6B60F5) : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _priority != 'All' ? const Color(0xFF6B60F5) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.tune_rounded,
+                            size: 16,
+                            color: _priority != 'All' ? Colors.white : const Color(0xFF64748B),
+                          ),
+                          if (_priority != 'All') ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              _priority,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-          ],
+          ),
+          const SizedBox(height: 8),
+
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -218,6 +265,45 @@ class _TaskListScreenState extends State<TaskListScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _filterPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF6B60F5) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF6B60F5) : const Color(0xFFE2E8F0),
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF6B60F5).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
       ),
     );
   }
@@ -242,7 +328,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100), // room for the FAB
       itemCount: visible.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      separatorBuilder: (context, index) => const SizedBox(height: 14),
       itemBuilder: (_, i) => TaskCard(
         task: visible[i].task,
         sla: visible[i].sla,
@@ -272,57 +358,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
         Text(subtitle,
             textAlign: TextAlign.center, style: TextStyle(color: muted)),
       ],
-    );
-  }
-}
-
-/// Small labelled dropdown used for the list filters.
-class _FilterDropdown extends StatelessWidget {
-  const _FilterDropdown({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor = Theme.of(context).colorScheme.onSurface;
-    return InputDecorator(
-      isEmpty: false,
-      decoration: InputDecoration(
-        labelText: label,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          isDense: true,
-          iconSize: 20,
-          borderRadius: BorderRadius.circular(14),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
-          items: [
-            for (final o in options)
-              DropdownMenuItem<String>(
-                value: o,
-                child: Text(o, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-        ),
-      ),
     );
   }
 }

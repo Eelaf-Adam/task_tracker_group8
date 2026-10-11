@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 
-/// The four SLA states required by the brief.
+/// The four SLA states tracked by the application.
 enum SlaStatus { onTrack, atRisk, overdue, completed }
 
 /// Result of classifying a task: the status plus a human-readable reason.
@@ -152,6 +152,14 @@ extension TaskSla on Task {
         'done' || 'completed' => 'Done',
         _ => 'To Do',
       };
+
+  double get progressFraction {
+    if (isDone) return 1.0;
+    if (statusLabel == 'In Progress') return 0.6;
+    return 0.0;
+  }
+
+  int get progressPercent => (progressFraction * 100).round();
 
   String get priorityLabel {
     final p = _normalise(priority);
