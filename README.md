@@ -84,3 +84,19 @@ Execute unit and widget tests:
 flutter test
 ```
 
+---
+
+## Team contributions and branches
+
+Every member works on their own branch and merges through a pull request into `main`.
+
+| Member | Branch | Key responsibilities |
+| :--- | :--- | :--- |
+| **Eelaf Abuelgasim Abdalla Adam** | `eelaf-branch` | App foundation, authentication, routing, form validation, app theme |
+| **Benjamin Niyomurinzi** | `member2-fix-task-list` | Task model, `StorageService` (local persistence), create/edit task form and validation |
+| **Dianah Shimwa Gasasira** | `feature/task-management-sla` | SLA classification engine, task list (search and filters), task details, task status screen, reusable task widgets |
+| **Kenny Gael Ishimwe Gatete** | `kenny-screens` | Dashboard architecture, dual-axis layout, team and profile views |
+
+The group contribution tracker linked at the top records each member's tasks, review status and meetings.
+
+---
